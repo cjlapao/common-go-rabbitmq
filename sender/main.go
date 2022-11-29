@@ -16,7 +16,7 @@ type SenderService struct {
 	logger       *log.Logger
 	connection   *amqp.Connection
 	exchangeName string
-	queueName    string
+	routingKey   string
 	Name         string
 }
 
@@ -47,9 +47,9 @@ func (sender *SenderService) SendTransientToExchange(exchangeName string, messag
 	return sender.Send(exchangeName, "", message, adapters.TransientMessage)
 }
 
-func (s *SenderService) Send(exchangeName string, queueName string, message adapters.Message, deliveryMode adapters.MessageDeliveryMode) error {
+func (s *SenderService) Send(exchangeName string, routingKey string, message adapters.Message, deliveryMode adapters.MessageDeliveryMode) error {
 	s.exchangeName = exchangeName
-	s.queueName = queueName
+	s.routingKey = routingKey
 
 	ch, err := s.connection.Channel()
 	if err != nil {
@@ -57,8 +57,8 @@ func (s *SenderService) Send(exchangeName string, queueName string, message adap
 		return err
 	}
 
-	if s.queueName != "" {
-		_, err := ch.QueueInspect(queueName)
+	if s.routingKey != "" {
+		_, err := ch.QueueInspect(routingKey)
 		if err != nil {
 			return err
 		}
@@ -70,7 +70,7 @@ func (s *SenderService) Send(exchangeName string, queueName string, message adap
 
 	msgType := adapters.GetMessageLabel(message)
 	mId := cryptorand.GetRandomString(constants.ID_SIZE)
-	if err := ch.PublishWithContext(ctx, s.exchangeName, s.queueName, false, false, amqp.Publishing{
+	if err := ch.PublishWithContext(ctx, s.exchangeName, s.routingKey, false, false, amqp.Publishing{
 		DeliveryMode:  deliveryMode.ToAmqpDeliveryMode(),
 		ContentType:   message.ContentType(),
 		CorrelationId: message.CorrelationID(),
@@ -88,8 +88,8 @@ func (s *SenderService) Send(exchangeName string, queueName string, message adap
 		return err
 	}
 
-	if queueName != "" {
-		s.logger.Info("Message %v width id %v sent successfully to queue %v", msgType, mId, queueName)
+	if routingKey != "" {
+		s.logger.Info("Message %v width id %v sent successfully to queue %v", msgType, mId, routingKey)
 	} else {
 		s.logger.Info("Message %v width id %v sent successfully to exchange %v", msgType, mId, exchangeName)
 	}
