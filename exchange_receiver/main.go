@@ -5,7 +5,8 @@ import (
 
 	"github.com/cjlapao/common-go-rabbitmq/adapters"
 	"github.com/cjlapao/common-go-rabbitmq/entities"
-	"github.com/cjlapao/common-go-rabbitmq/messages"
+	"github.com/cjlapao/common-go-rabbitmq/message"
+	"github.com/cjlapao/common-go-rabbitmq/processor"
 	"github.com/cjlapao/common-go/log"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -15,11 +16,12 @@ type ExchangeReceiverService[T adapters.Message] struct {
 	connection      *amqp.Connection
 	ServiceName     string
 	ExchangeName    string
+	RoutingKey      string
 	Type            entities.ReceiverExchangeType
 	Options         entities.ReceiverOptions
 	ExchangeOptions entities.AmqpChannelOptions
 	QueueOptions    entities.AmqpChannelOptions
-	handler         func(T)
+	handler         func(T) message.MessageResult
 }
 
 func New[T adapters.Message](connection *amqp.Connection) *ExchangeReceiverService[T] {
@@ -75,7 +77,7 @@ func (r *ExchangeReceiverService[T]) NoWait() *ExchangeReceiverService[T] {
 	return r
 }
 
-func (r *ExchangeReceiverService[T]) HandleMessage(exchangeName string, h func(T)) {
+func (r *ExchangeReceiverService[T]) HandleMessage(exchangeName string, h func(T) message.MessageResult) {
 	r.handler = h
 	r.handle(exchangeName)
 }
@@ -89,6 +91,10 @@ func (r *ExchangeReceiverService[T]) handle(exchangeName string) error {
 	if err != nil {
 		r.logger.Exception(err, "failed to create channel")
 		return err
+	}
+
+	if r.Type == entities.Fanout {
+		r.RoutingKey = ""
 	}
 
 	t := *new(T)
@@ -140,7 +146,7 @@ func (r *ExchangeReceiverService[T]) handle(exchangeName string) error {
 
 	err = ch.QueueBind(
 		q.Name,
-		"",
+		r.RoutingKey,
 		exchangeName,
 		r.Options.NoWait,
 		nil,
@@ -179,7 +185,7 @@ func (r *ExchangeReceiverService[T]) handle(exchangeName string) error {
 
 	go func() {
 		for d := range msgs {
-			messages.ProcessMessage(d, r.handler, r.Options)
+			processor.ProcessMessage(d, r.handler, r.Options)
 		}
 	}()
 

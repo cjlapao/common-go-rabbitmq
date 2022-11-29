@@ -5,7 +5,8 @@ import (
 
 	"github.com/cjlapao/common-go-rabbitmq/adapters"
 	"github.com/cjlapao/common-go-rabbitmq/entities"
-	"github.com/cjlapao/common-go-rabbitmq/messages"
+	"github.com/cjlapao/common-go-rabbitmq/message"
+	"github.com/cjlapao/common-go-rabbitmq/processor"
 	"github.com/cjlapao/common-go/log"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -17,7 +18,7 @@ type QueueReceiverService[T adapters.Message] struct {
 	QueueName    string
 	Options      entities.ReceiverOptions
 	QueueOptions entities.AmqpChannelOptions
-	handler      func(T)
+	handler      func(T) message.MessageResult
 }
 
 func New[T adapters.Message](connection *amqp.Connection) *QueueReceiverService[T] {
@@ -66,7 +67,7 @@ func (r *QueueReceiverService[T]) NoWait() *QueueReceiverService[T] {
 	return r
 }
 
-func (r *QueueReceiverService[T]) HandleMessage(queueName string, h func(T)) {
+func (r *QueueReceiverService[T]) HandleMessage(queueName string, h func(T) message.MessageResult) {
 	r.handler = h
 	r.handle(queueName)
 }
@@ -145,7 +146,7 @@ func (r *QueueReceiverService[T]) handle(queueName string) error {
 	r.logger.Info("starting to handle messages %v", messageType)
 	go func() {
 		for d := range msgs {
-			messages.ProcessMessage(d, r.handler, r.Options)
+			processor.ProcessMessage(d, r.handler, r.Options)
 		}
 	}()
 

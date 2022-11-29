@@ -5,7 +5,9 @@ import (
 
 	"github.com/cjlapao/common-go-rabbitmq/adapters"
 	"github.com/cjlapao/common-go-rabbitmq/constants"
+	"github.com/cjlapao/common-go-rabbitmq/entities"
 	"github.com/cjlapao/common-go-rabbitmq/exchange_receiver"
+	"github.com/cjlapao/common-go-rabbitmq/message"
 	"github.com/cjlapao/common-go-rabbitmq/queue_receiver"
 	"github.com/cjlapao/common-go/execution_context"
 	"github.com/cjlapao/common-go/log"
@@ -56,7 +58,7 @@ func Get() *RabbitMQClient {
 	return globalRabbitMQClient
 }
 
-func RegisterQueueHandler[T adapters.Message](queueName string, handler func(T)) {
+func RegisterQueueHandler[T adapters.Message](queueName string, handler func(T) message.MessageResult) {
 	client := Get()
 
 	t := *new(T)
@@ -73,7 +75,62 @@ func RegisterQueueHandler[T adapters.Message](queueName string, handler func(T))
 	client.QueuesHandlers = append(client.QueuesHandlers, name)
 }
 
-func RegisterExchangeHandler[T adapters.Message](exchangeName string, handler func(T)) {
+func RegisterTopicExchangeHandler[T adapters.Message](exchangeName string, routingKey string, handler func(T) message.MessageResult) {
+	client := Get()
+
+	t := *new(T)
+	name := exchangeName + "." + adapters.GetMessageLabel(t)
+	for _, exchangeHandlerName := range client.ExchangeHandlers {
+		if strings.EqualFold(exchangeHandlerName, name) {
+			client.logger.Warn("There is already a handler for the exchange %v and message type %v", exchangeName, adapters.GetMessageLabel(t))
+			return
+		}
+	}
+
+	handlerSvc := exchange_receiver.New[T](client.Connection)
+	handlerSvc.Type = entities.Topic
+	handlerSvc.RoutingKey = routingKey
+	go handlerSvc.HandleMessage(exchangeName, handler)
+	client.ExchangeHandlers = append(client.ExchangeHandlers, name)
+}
+
+func RegisterDirectExchangeHandler[T adapters.Message](exchangeName string, routingKey string, handler func(T) message.MessageResult) {
+	client := Get()
+
+	t := *new(T)
+	name := exchangeName + "." + adapters.GetMessageLabel(t)
+	for _, exchangeHandlerName := range client.ExchangeHandlers {
+		if strings.EqualFold(exchangeHandlerName, name) {
+			client.logger.Warn("There is already a handler for the exchange %v and message type %v", exchangeName, adapters.GetMessageLabel(t))
+			return
+		}
+	}
+
+	handlerSvc := exchange_receiver.New[T](client.Connection)
+	handlerSvc.Type = entities.Direct
+	handlerSvc.RoutingKey = routingKey
+	go handlerSvc.HandleMessage(exchangeName, handler)
+	client.ExchangeHandlers = append(client.ExchangeHandlers, name)
+}
+
+func RegisterFanoutExchangeHandler[T adapters.Message](exchangeName string, handler func(T) message.MessageResult) {
+	client := Get()
+
+	t := *new(T)
+	name := exchangeName + "." + adapters.GetMessageLabel(t)
+	for _, exchangeHandlerName := range client.ExchangeHandlers {
+		if strings.EqualFold(exchangeHandlerName, name) {
+			client.logger.Warn("There is already a handler for the exchange %v and message type %v", exchangeName, adapters.GetMessageLabel(t))
+			return
+		}
+	}
+
+	handlerSvc := exchange_receiver.New[T](client.Connection)
+	go handlerSvc.HandleMessage(exchangeName, handler)
+	client.ExchangeHandlers = append(client.ExchangeHandlers, name)
+}
+
+func RegisterExchangeHandler[T adapters.Message](exchangeName string, exchangeType entities.ReceiverExchangeType, routingKey string, handler func(T) message.MessageResult) {
 	client := Get()
 
 	t := *new(T)
