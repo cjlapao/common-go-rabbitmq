@@ -34,12 +34,12 @@ func ProcessMessage[T adapters.Message](d amqp.Delivery, handler func(T) message
 		if !result.Success() {
 			logger.Exception(result.Error, "error handling message id %s", d.CorrelationId)
 			d.Nack(result.Multiple, result.Requeue)
+		} else {
+			if !options.AutoAck {
+				logger.Info("Manually Acknowledging the message id %v", d.CorrelationId)
+				d.Ack(false)
+			}
+			logger.Info("Finished processing message id %v", d.CorrelationId)
 		}
-		if !options.AutoAck {
-			logger.Info("Manually Acknowledging the message id %v", d.CorrelationId)
-			d.Ack(false)
-		}
-
-		logger.Info("Finished processing message id %v", d.CorrelationId)
 	}
 }
