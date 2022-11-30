@@ -1,6 +1,10 @@
 package client
 
 import (
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/cjlapao/common-go-rabbitmq/constants"
 	"github.com/cjlapao/common-go/execution_context"
 	"github.com/cjlapao/common-go/log"
@@ -53,15 +57,16 @@ func Get() *RabbitMQClient {
 }
 
 func StartListening() {
-	var forever chan struct{}
-	<-forever
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	<-c
 	client := Get()
 	client.Close()
 }
 
 func (client *RabbitMQClient) Close() {
 	if !client.connection.IsClosed() {
-		client.logger.Info("Closing RabbitMQ open connection")
+		client.logger.Info("Closing RabbitMQ connection")
 		client.connection.Close()
 	}
 }
