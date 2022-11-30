@@ -2,97 +2,97 @@ package sender
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	cryptorand "github.com/cjlapao/common-go-cryptorand"
 	"github.com/cjlapao/common-go-rabbitmq/adapters"
 	"github.com/cjlapao/common-go-rabbitmq/client"
+	"github.com/cjlapao/common-go-rabbitmq/entities"
 	"github.com/cjlapao/common-go/constants"
 	"github.com/cjlapao/common-go/log"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type SenderService struct {
-	logger       *log.Logger
-	connection   *amqp.Connection
-	exchangeName string
-	routingKey   string
-	Name         string
+	logger *log.Logger
+	client *client.RabbitMQClient
 }
 
 func New() *SenderService {
 	client := client.Get()
 
 	result := SenderService{
-		logger:     log.Get(),
-		connection: client.Connection,
+		logger: log.Get(),
+		client: client,
 	}
 
 	return &result
 }
 
-func (sender *SenderService) SendPersistentToQueue(queueName string, message adapters.Message) error {
-	return sender.Send("", queueName, message, adapters.PersistentMessage)
-}
-
-func (sender *SenderService) SendTransientToQueue(queueName string, message adapters.Message) error {
-	return sender.Send("", queueName, message, adapters.TransientMessage)
-}
-
-func (sender *SenderService) SendPersistentToExchange(exchangeName string, message adapters.Message) error {
-	return sender.Send(exchangeName, "", message, adapters.PersistentMessage)
-}
-
-func (sender *SenderService) SendTransientToExchange(exchangeName string, message adapters.Message) error {
-	return sender.Send(exchangeName, "", message, adapters.TransientMessage)
-}
-
-func (s *SenderService) Send(exchangeName string, routingKey string, message adapters.Message, deliveryMode adapters.MessageDeliveryMode) error {
-	s.exchangeName = exchangeName
-	s.routingKey = routingKey
-
-	ch, err := s.connection.Channel()
+func (s *SenderService) Send(msg SenderMessage) error {
+	ch, err := s.client.GetChannel()
 	if err != nil {
-		s.logger.Exception(err, "failed to create channel")
 		return err
 	}
 
-	if s.routingKey != "" {
-		_, err := ch.QueueInspect(routingKey)
+	if msg.Type == entities.QueueMessage {
+		_, err := ch.QueueInspect(msg.Name)
+		if err != nil {
+			return err
+		}
+		// switching to
+		msg.RoutingKey = msg.Name
+		msg.Name = ""
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.client.DefaultTimeout)*time.Second)
+
+	defer cancel()
+
+	if ch.IsClosed() {
+		ch, err = s.client.GetChannel()
 		if err != nil {
 			return err
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
-	msgType := adapters.GetMessageLabel(message)
+	msgType := adapters.GetMessageLabel(msg.Message)
 	mId := cryptorand.GetRandomString(constants.ID_SIZE)
-	if err := ch.PublishWithContext(ctx, s.exchangeName, s.routingKey, false, false, amqp.Publishing{
-		DeliveryMode:  deliveryMode.ToAmqpDeliveryMode(),
-		ContentType:   message.ContentType(),
-		CorrelationId: message.CorrelationID(),
+	if err := ch.PublishWithContext(ctx, msg.Name, msg.RoutingKey, false, false, amqp.Publishing{
+		DeliveryMode:  msg.DeliveryMode.ToAmqpDeliveryMode(),
+		ContentType:   msg.Message.ContentType(),
+		CorrelationId: msg.Message.CorrelationID(),
 		MessageId:     mId,
+		ReplyTo:       msg.CallbackQueue,
 		Type:          msgType,
 		Timestamp:     time.Now(),
-		AppId:         adapters.GetMessageLabel(message),
-		Body:          message.Body(),
+		AppId:         msg.Message.Domain(),
+		Body:          msg.Message.Body(),
 		Headers: amqp.Table{
-			"X-Domain":  message.Domain(),
-			"X-Name":    message.Name(),
-			"X-Version": message.Version(),
+			"X-Domain":  msg.Message.Domain(),
+			"X-Name":    msg.Message.Name(),
+			"X-Version": msg.Message.Version(),
 		},
 	}); err != nil {
 		return err
 	}
 
-	if routingKey != "" {
-		s.logger.Info("Message %v width id %v sent successfully to queue %v", msgType, mId, routingKey)
-	} else {
-		s.logger.Info("Message %v width id %v sent successfully to exchange %v", msgType, mId, exchangeName)
+	// Switching back to logs
+	if msg.Type == entities.QueueMessage {
+		msg.Name = msg.RoutingKey
+		msg.RoutingKey = ""
 	}
+
+	logMsg := fmt.Sprintf("Message %s width id %s sent successfully to %s %s ", msgType, mId, msg.Name, msg.Type)
+	if msg.RoutingKey != "" {
+		logMsg += fmt.Sprintf(" with routing key %s", msg.RoutingKey)
+	}
+	if msg.CallbackQueue != "" {
+		logMsg += fmt.Sprintf(" and calling back queue %s", msg.CallbackQueue)
+	}
+
+	s.logger.Info(logMsg)
 
 	return nil
 }
