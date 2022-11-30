@@ -31,7 +31,7 @@ func RegisterQueueHandler[T adapters.Message](queueName string, handler func(T) 
 	rmqClient.QueuesHandlers = append(rmqClient.QueuesHandlers, name)
 }
 
-func RegisterTopicExchangeHandler[T adapters.Message](exchangeName string, queueName string, routingKey string, handler func(T) message.MessageResult) {
+func RegisterTopicHandler[T adapters.Message](exchangeName string, routingKey string, handler func(T) message.MessageResult) {
 	rqmClient := client.Get()
 
 	t := *new(T)
@@ -46,12 +46,34 @@ func RegisterTopicExchangeHandler[T adapters.Message](exchangeName string, queue
 	handlerSvc := exchange_receiver.New[T]()
 	handlerSvc.Type = entities.Topic
 	handlerSvc.RoutingKey = routingKey
-	handlerSvc.QueueName = queueName
 	go handlerSvc.HandleMessage(exchangeName, handler)
 	rqmClient.ExchangeHandlers = append(rqmClient.ExchangeHandlers, name)
 }
 
-func RegisterDirectExchangeHandler[T adapters.Message](exchangeName string, queueName string, routingKey string, handler func(T) message.MessageResult) {
+func RegisterTopicSubscriptionHandler[T adapters.Message](exchangeName string, subscriptionName string, routingKey string, handler func(T) message.MessageResult) {
+	rqmClient := client.Get()
+
+	t := *new(T)
+	name := exchangeName + "." + adapters.GetMessageLabel(t)
+	for _, exchangeHandlerName := range rqmClient.ExchangeHandlers {
+		if strings.EqualFold(exchangeHandlerName, name) {
+			logger.Warn("There is already a handler for the exchange %v and message type %v", exchangeName, adapters.GetMessageLabel(t))
+			return
+		}
+	}
+
+	handlerSvc := exchange_receiver.New[T]()
+	handlerSvc.Type = entities.Topic
+	handlerSvc.RoutingKey = routingKey
+	if subscriptionName != "" {
+		handlerSvc.QueueName = subscriptionName
+		handlerSvc.QueueOptions.Exclusive = false
+	}
+	go handlerSvc.HandleMessage(exchangeName, handler)
+	rqmClient.ExchangeHandlers = append(rqmClient.ExchangeHandlers, name)
+}
+
+func RegisterDirectHandler[T adapters.Message](exchangeName string, routingKey string, handler func(T) message.MessageResult) {
 	rmqClient := client.Get()
 
 	t := *new(T)
@@ -66,12 +88,11 @@ func RegisterDirectExchangeHandler[T adapters.Message](exchangeName string, queu
 	handlerSvc := exchange_receiver.New[T]()
 	handlerSvc.Type = entities.Direct
 	handlerSvc.RoutingKey = routingKey
-	handlerSvc.QueueName = queueName
 	go handlerSvc.HandleMessage(exchangeName, handler)
 	rmqClient.ExchangeHandlers = append(rmqClient.ExchangeHandlers, name)
 }
 
-func RegisterFanoutExchangeHandler[T adapters.Message](exchangeName string, queueName string, handler func(T) message.MessageResult) {
+func RegisterDirectSubscriptionHandler[T adapters.Message](exchangeName string, subscriptionName string, routingKey string, handler func(T) message.MessageResult) {
 	rmqClient := client.Get()
 
 	t := *new(T)
@@ -84,12 +105,34 @@ func RegisterFanoutExchangeHandler[T adapters.Message](exchangeName string, queu
 	}
 
 	handlerSvc := exchange_receiver.New[T]()
-	handlerSvc.QueueName = queueName
+	handlerSvc.Type = entities.Direct
+	handlerSvc.RoutingKey = routingKey
+	if subscriptionName != "" {
+		handlerSvc.QueueName = subscriptionName
+		handlerSvc.QueueOptions.Exclusive = false
+	}
 	go handlerSvc.HandleMessage(exchangeName, handler)
 	rmqClient.ExchangeHandlers = append(rmqClient.ExchangeHandlers, name)
 }
 
-func RegisterHeadersExchangeHandler[T adapters.Message](exchangeName string, queueName string, routingKey string, handler func(T) message.MessageResult) {
+func RegisterFanoutHandler[T adapters.Message](exchangeName string, handler func(T) message.MessageResult) {
+	rmqClient := client.Get()
+
+	t := *new(T)
+	name := exchangeName + "." + adapters.GetMessageLabel(t)
+	for _, exchangeHandlerName := range rmqClient.ExchangeHandlers {
+		if strings.EqualFold(exchangeHandlerName, name) {
+			logger.Warn("There is already a handler for the exchange %v and message type %v", exchangeName, adapters.GetMessageLabel(t))
+			return
+		}
+	}
+
+	handlerSvc := exchange_receiver.New[T]()
+	go handlerSvc.HandleMessage(exchangeName, handler)
+	rmqClient.ExchangeHandlers = append(rmqClient.ExchangeHandlers, name)
+}
+
+func RegisterHeadersHandler[T adapters.Message](exchangeName string, queueName string, routingKey string, handler func(T) message.MessageResult) {
 	rqmClient := client.Get()
 
 	t := *new(T)
@@ -104,7 +147,33 @@ func RegisterHeadersExchangeHandler[T adapters.Message](exchangeName string, que
 	handlerSvc := exchange_receiver.New[T]()
 	handlerSvc.Type = entities.Headers
 	handlerSvc.RoutingKey = routingKey
-	handlerSvc.QueueName = queueName
+	if queueName != "" {
+		handlerSvc.QueueName = queueName
+		handlerSvc.QueueOptions.Exclusive = false
+	}
+	go handlerSvc.HandleMessage(exchangeName, handler)
+	rqmClient.ExchangeHandlers = append(rqmClient.ExchangeHandlers, name)
+}
+
+func RegisterHeadersSubscriptionHandler[T adapters.Message](exchangeName string, subscriptionName string, routingKey string, handler func(T) message.MessageResult) {
+	rqmClient := client.Get()
+
+	t := *new(T)
+	name := exchangeName + "." + adapters.GetMessageLabel(t)
+	for _, exchangeHandlerName := range rqmClient.ExchangeHandlers {
+		if strings.EqualFold(exchangeHandlerName, name) {
+			logger.Warn("There is already a handler for the exchange %v and message type %v", exchangeName, adapters.GetMessageLabel(t))
+			return
+		}
+	}
+
+	handlerSvc := exchange_receiver.New[T]()
+	handlerSvc.Type = entities.Headers
+	handlerSvc.RoutingKey = routingKey
+	if subscriptionName != "" {
+		handlerSvc.QueueName = subscriptionName
+		handlerSvc.QueueOptions.Exclusive = false
+	}
 	go handlerSvc.HandleMessage(exchangeName, handler)
 	rqmClient.ExchangeHandlers = append(rqmClient.ExchangeHandlers, name)
 }
@@ -122,7 +191,10 @@ func RegisterExchangeHandler[T adapters.Message](exchangeName string, exchangeTy
 	}
 
 	handlerSvc := exchange_receiver.New[T]()
-	handlerSvc.QueueName = queueName
+	if queueName != "" {
+		handlerSvc.QueueName = queueName
+		handlerSvc.QueueOptions.Exclusive = false
+	}
 	go handlerSvc.HandleMessage(exchangeName, handler)
 	rmqClient.ExchangeHandlers = append(rmqClient.ExchangeHandlers, name)
 }
