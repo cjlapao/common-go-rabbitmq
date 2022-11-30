@@ -17,6 +17,7 @@ type ExchangeReceiverService[T adapters.Message] struct {
 	ServiceName     string
 	ExchangeName    string
 	RoutingKey      string
+	QueueName       string
 	Type            entities.ReceiverExchangeType
 	Options         entities.ReceiverOptions
 	ExchangeOptions entities.AmqpChannelOptions
@@ -121,7 +122,7 @@ func (r *ExchangeReceiverService[T]) handle(exchangeName string) error {
 	}
 
 	q, err := ch.QueueDeclare(
-		"",
+		r.QueueName,
 		r.QueueOptions.Durable,
 		r.QueueOptions.AutoDelete,
 		r.QueueOptions.Exclusive,

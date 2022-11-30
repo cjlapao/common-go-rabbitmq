@@ -31,7 +31,7 @@ func RegisterQueueHandler[T adapters.Message](queueName string, handler func(T) 
 	rmqClient.QueuesHandlers = append(rmqClient.QueuesHandlers, name)
 }
 
-func RegisterTopicExchangeHandler[T adapters.Message](exchangeName string, routingKey string, handler func(T) message.MessageResult) {
+func RegisterTopicExchangeHandler[T adapters.Message](exchangeName string, queueName string, routingKey string, handler func(T) message.MessageResult) {
 	rqmClient := client.Get()
 
 	t := *new(T)
@@ -46,11 +46,12 @@ func RegisterTopicExchangeHandler[T adapters.Message](exchangeName string, routi
 	handlerSvc := exchange_receiver.New[T]()
 	handlerSvc.Type = entities.Topic
 	handlerSvc.RoutingKey = routingKey
+	handlerSvc.QueueName = queueName
 	go handlerSvc.HandleMessage(exchangeName, handler)
 	rqmClient.ExchangeHandlers = append(rqmClient.ExchangeHandlers, name)
 }
 
-func RegisterDirectExchangeHandler[T adapters.Message](exchangeName string, routingKey string, handler func(T) message.MessageResult) {
+func RegisterDirectExchangeHandler[T adapters.Message](exchangeName string, queueName string, routingKey string, handler func(T) message.MessageResult) {
 	rmqClient := client.Get()
 
 	t := *new(T)
@@ -65,11 +66,12 @@ func RegisterDirectExchangeHandler[T adapters.Message](exchangeName string, rout
 	handlerSvc := exchange_receiver.New[T]()
 	handlerSvc.Type = entities.Direct
 	handlerSvc.RoutingKey = routingKey
+	handlerSvc.QueueName = queueName
 	go handlerSvc.HandleMessage(exchangeName, handler)
 	rmqClient.ExchangeHandlers = append(rmqClient.ExchangeHandlers, name)
 }
 
-func RegisterFanoutExchangeHandler[T adapters.Message](exchangeName string, handler func(T) message.MessageResult) {
+func RegisterFanoutExchangeHandler[T adapters.Message](exchangeName string, queueName string, handler func(T) message.MessageResult) {
 	rmqClient := client.Get()
 
 	t := *new(T)
@@ -82,11 +84,32 @@ func RegisterFanoutExchangeHandler[T adapters.Message](exchangeName string, hand
 	}
 
 	handlerSvc := exchange_receiver.New[T]()
+	handlerSvc.QueueName = queueName
 	go handlerSvc.HandleMessage(exchangeName, handler)
 	rmqClient.ExchangeHandlers = append(rmqClient.ExchangeHandlers, name)
 }
 
-func RegisterExchangeHandler[T adapters.Message](exchangeName string, exchangeType entities.ReceiverExchangeType, routingKey string, handler func(T) message.MessageResult) {
+func RegisterHeadersExchangeHandler[T adapters.Message](exchangeName string, queueName string, routingKey string, handler func(T) message.MessageResult) {
+	rqmClient := client.Get()
+
+	t := *new(T)
+	name := exchangeName + "." + adapters.GetMessageLabel(t)
+	for _, exchangeHandlerName := range rqmClient.ExchangeHandlers {
+		if strings.EqualFold(exchangeHandlerName, name) {
+			logger.Warn("There is already a handler for the exchange %v and message type %v", exchangeName, adapters.GetMessageLabel(t))
+			return
+		}
+	}
+
+	handlerSvc := exchange_receiver.New[T]()
+	handlerSvc.Type = entities.Headers
+	handlerSvc.RoutingKey = routingKey
+	handlerSvc.QueueName = queueName
+	go handlerSvc.HandleMessage(exchangeName, handler)
+	rqmClient.ExchangeHandlers = append(rqmClient.ExchangeHandlers, name)
+}
+
+func RegisterExchangeHandler[T adapters.Message](exchangeName string, exchangeType entities.ReceiverExchangeType, queueName string, routingKey string, handler func(T) message.MessageResult) {
 	rmqClient := client.Get()
 
 	t := *new(T)
@@ -99,6 +122,7 @@ func RegisterExchangeHandler[T adapters.Message](exchangeName string, exchangeTy
 	}
 
 	handlerSvc := exchange_receiver.New[T]()
+	handlerSvc.QueueName = queueName
 	go handlerSvc.HandleMessage(exchangeName, handler)
 	rmqClient.ExchangeHandlers = append(rmqClient.ExchangeHandlers, name)
 }
