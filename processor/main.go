@@ -15,7 +15,7 @@ var logger = log.Get()
 func ProcessMessage[T adapters.Message](d amqp.Delivery, handler func(T) message.MessageResult, options entities.ReceiverOptions) {
 	t := *new(T)
 	messageType := adapters.GetMessageLabel(t)
-	if d.AppId != messageType {
+	if d.Type != messageType {
 		logger.Warn("Received message of type %v and was expecting of type %v", d.AppId, messageType)
 		if !options.AutoAck {
 			logger.Info("Manually Acknowledging the message id %v", d.CorrelationId)
