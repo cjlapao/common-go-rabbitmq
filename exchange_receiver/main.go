@@ -4,16 +4,16 @@ import (
 	"errors"
 
 	"github.com/cjlapao/common-go-rabbitmq/adapters"
+	"github.com/cjlapao/common-go-rabbitmq/client"
 	"github.com/cjlapao/common-go-rabbitmq/entities"
 	"github.com/cjlapao/common-go-rabbitmq/message"
 	"github.com/cjlapao/common-go-rabbitmq/processor"
 	"github.com/cjlapao/common-go/log"
-	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type ExchangeReceiverService[T adapters.Message] struct {
 	logger          *log.Logger
-	connection      *amqp.Connection
+	client          *client.RabbitMQClient
 	ServiceName     string
 	ExchangeName    string
 	RoutingKey      string
@@ -24,10 +24,10 @@ type ExchangeReceiverService[T adapters.Message] struct {
 	handler         func(T) message.MessageResult
 }
 
-func New[T adapters.Message](connection *amqp.Connection) *ExchangeReceiverService[T] {
+func New[T adapters.Message]() *ExchangeReceiverService[T] {
 	result := ExchangeReceiverService[T]{
-		logger:     log.Get(),
-		connection: connection,
+		logger: log.Get(),
+		client: client.Get(),
 		Options: entities.ReceiverOptions{
 			AutoAck:   true,
 			Exclusive: false,
@@ -87,9 +87,8 @@ func (r *ExchangeReceiverService[T]) handle(exchangeName string) error {
 		return errors.New("no handler registered")
 	}
 
-	ch, err := r.connection.Channel()
+	ch, err := r.client.GetChannel()
 	if err != nil {
-		r.logger.Exception(err, "failed to create channel")
 		return err
 	}
 
@@ -115,9 +114,8 @@ func (r *ExchangeReceiverService[T]) handle(exchangeName string) error {
 
 	// Creating the Queue if it does not exist
 	if ch.IsClosed() {
-		ch, err = r.connection.Channel()
+		ch, err = r.client.GetChannel()
 		if err != nil {
-			r.logger.Exception(err, "failed to create channel")
 			return err
 		}
 	}
@@ -137,9 +135,8 @@ func (r *ExchangeReceiverService[T]) handle(exchangeName string) error {
 	}
 
 	if ch.IsClosed() {
-		ch, err = r.connection.Channel()
+		ch, err = r.client.GetChannel()
 		if err != nil {
-			r.logger.Exception(err, "failed to create channel")
 			return err
 		}
 	}
@@ -158,9 +155,8 @@ func (r *ExchangeReceiverService[T]) handle(exchangeName string) error {
 	}
 
 	if ch.IsClosed() {
-		ch, err = r.connection.Channel()
+		ch, err = r.client.GetChannel()
 		if err != nil {
-			r.logger.Exception(err, "failed to create channel")
 			return err
 		}
 	}

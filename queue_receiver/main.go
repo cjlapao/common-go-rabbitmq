@@ -4,27 +4,26 @@ import (
 	"errors"
 
 	"github.com/cjlapao/common-go-rabbitmq/adapters"
+	"github.com/cjlapao/common-go-rabbitmq/client"
 	"github.com/cjlapao/common-go-rabbitmq/entities"
 	"github.com/cjlapao/common-go-rabbitmq/message"
 	"github.com/cjlapao/common-go-rabbitmq/processor"
 	"github.com/cjlapao/common-go/log"
-	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type QueueReceiverService[T adapters.Message] struct {
 	logger       *log.Logger
-	connection   *amqp.Connection
-	channel      *amqp.Channel
+	client       *client.RabbitMQClient
 	QueueName    string
 	Options      entities.ReceiverOptions
 	QueueOptions entities.AmqpChannelOptions
 	handler      func(T) message.MessageResult
 }
 
-func New[T adapters.Message](connection *amqp.Connection) *QueueReceiverService[T] {
+func New[T adapters.Message]() *QueueReceiverService[T] {
 	result := QueueReceiverService[T]{
-		logger:     log.Get(),
-		connection: connection,
+		logger: log.Get(),
+		client: client.Get(),
 		Options: entities.ReceiverOptions{
 			AutoAck:   true,
 			Exclusive: false,
@@ -78,11 +77,8 @@ func (r *QueueReceiverService[T]) handle(queueName string) error {
 	}
 
 	r.QueueName = queueName
-	if r.connection == nil || r.connection.IsClosed() {
-		return errors.New("failed to connect to server or connection closed")
-	}
 
-	ch, err := r.connection.Channel()
+	ch, err := r.client.GetChannel()
 	if err != nil {
 		r.logger.Exception(err, "failed to create channel")
 		return err
@@ -92,13 +88,14 @@ func (r *QueueReceiverService[T]) handle(queueName string) error {
 	_, err = ch.QueueInspect(queueName)
 	if err != nil {
 		r.logger.Info("Queue %v does not exists, creating it", queueName)
-		createChannel, err := r.connection.Channel()
-
-		if err != nil {
-			r.logger.Exception(err, "failed to create channel to create queue")
-			return err
+		if ch.IsClosed() {
+			ch, err = r.client.GetChannel()
+			if err != nil {
+				return err
+			}
 		}
-		if _, err := createChannel.QueueDeclare(
+
+		if _, err := ch.QueueDeclare(
 			r.QueueName,
 			r.QueueOptions.Durable,
 			r.QueueOptions.AutoDelete,
@@ -107,19 +104,15 @@ func (r *QueueReceiverService[T]) handle(queueName string) error {
 			nil,
 		); err != nil {
 			r.logger.Exception(err, "creating queue %v", queueName)
-			createChannel.Close()
 			return err
 		}
-
-		createChannel.Close()
 	}
 
-	ch.Close()
-
-	ch, err = r.connection.Channel()
-	if err != nil {
-		r.logger.Exception(err, "failed to create channel")
-		return err
+	if ch.IsClosed() {
+		ch, err = r.client.GetChannel()
+		if err != nil {
+			return err
+		}
 	}
 
 	t := *new(T)

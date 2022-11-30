@@ -1,17 +1,10 @@
 package client
 
 import (
-	"strings"
-
-	"github.com/cjlapao/common-go-rabbitmq/adapters"
 	"github.com/cjlapao/common-go-rabbitmq/constants"
-	"github.com/cjlapao/common-go-rabbitmq/entities"
-	"github.com/cjlapao/common-go-rabbitmq/exchange_receiver"
-	"github.com/cjlapao/common-go-rabbitmq/message"
-	"github.com/cjlapao/common-go-rabbitmq/queue_receiver"
 	"github.com/cjlapao/common-go/execution_context"
 	"github.com/cjlapao/common-go/log"
-	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/rabbitmq/amqp091-go"
 )
 
 var globalRabbitMQClient *RabbitMQClient
@@ -19,29 +12,30 @@ var globalRabbitMQClient *RabbitMQClient
 type RabbitMQClient struct {
 	logger           *log.Logger
 	ConnectionString string
-	Connection       *amqp.Connection
+	connection       *amqp091.Connection
+	DefaultTimeout   int
 	ExchangeHandlers []string
 	QueuesHandlers   []string
 }
 
 func New(ConnectionString string) *RabbitMQClient {
+	ctx := execution_context.Get()
+	config := ctx.Configuration
+	defaultTimeout := config.GetInt(constants.SENDER_DEFAULT_TIMEOUT)
+	if defaultTimeout == 0 {
+		defaultTimeout = 5
+	}
 
 	client := RabbitMQClient{
 		logger:           log.Get(),
 		ConnectionString: ConnectionString,
 		ExchangeHandlers: make([]string, 0),
 		QueuesHandlers:   make([]string, 0),
+		DefaultTimeout:   defaultTimeout,
 	}
 
-	if client.Connection == nil {
-		conn, err := amqp.Dial(client.ConnectionString)
-		if err != nil {
-			client.logger.Exception(err, "connecting to rabbitmq server")
-			return nil
-		}
-
-		client.Connection = conn
-		client.logger.Info("Connected to RabbitMQ server")
+	if client.connection == nil {
+		client.Connect()
 	}
 
 	return &client
@@ -58,95 +52,6 @@ func Get() *RabbitMQClient {
 	return globalRabbitMQClient
 }
 
-func RegisterQueueHandler[T adapters.Message](queueName string, handler func(T) message.MessageResult) {
-	client := Get()
-
-	t := *new(T)
-	name := queueName + "." + adapters.GetMessageLabel(t)
-	for _, queueHandlerName := range client.QueuesHandlers {
-		if strings.EqualFold(queueHandlerName, name) {
-			client.logger.Warn("There is already a handler for the queue %v and message type %v", queueName, adapters.GetMessageLabel(t))
-			return
-		}
-	}
-
-	handlerSvc := queue_receiver.New[T](client.Connection)
-	go handlerSvc.HandleMessage(queueName, handler)
-	client.QueuesHandlers = append(client.QueuesHandlers, name)
-}
-
-func RegisterTopicExchangeHandler[T adapters.Message](exchangeName string, routingKey string, handler func(T) message.MessageResult) {
-	client := Get()
-
-	t := *new(T)
-	name := exchangeName + "." + adapters.GetMessageLabel(t)
-	for _, exchangeHandlerName := range client.ExchangeHandlers {
-		if strings.EqualFold(exchangeHandlerName, name) {
-			client.logger.Warn("There is already a handler for the exchange %v and message type %v", exchangeName, adapters.GetMessageLabel(t))
-			return
-		}
-	}
-
-	handlerSvc := exchange_receiver.New[T](client.Connection)
-	handlerSvc.Type = entities.Topic
-	handlerSvc.RoutingKey = routingKey
-	go handlerSvc.HandleMessage(exchangeName, handler)
-	client.ExchangeHandlers = append(client.ExchangeHandlers, name)
-}
-
-func RegisterDirectExchangeHandler[T adapters.Message](exchangeName string, routingKey string, handler func(T) message.MessageResult) {
-	client := Get()
-
-	t := *new(T)
-	name := exchangeName + "." + adapters.GetMessageLabel(t)
-	for _, exchangeHandlerName := range client.ExchangeHandlers {
-		if strings.EqualFold(exchangeHandlerName, name) {
-			client.logger.Warn("There is already a handler for the exchange %v and message type %v", exchangeName, adapters.GetMessageLabel(t))
-			return
-		}
-	}
-
-	handlerSvc := exchange_receiver.New[T](client.Connection)
-	handlerSvc.Type = entities.Direct
-	handlerSvc.RoutingKey = routingKey
-	go handlerSvc.HandleMessage(exchangeName, handler)
-	client.ExchangeHandlers = append(client.ExchangeHandlers, name)
-}
-
-func RegisterFanoutExchangeHandler[T adapters.Message](exchangeName string, handler func(T) message.MessageResult) {
-	client := Get()
-
-	t := *new(T)
-	name := exchangeName + "." + adapters.GetMessageLabel(t)
-	for _, exchangeHandlerName := range client.ExchangeHandlers {
-		if strings.EqualFold(exchangeHandlerName, name) {
-			client.logger.Warn("There is already a handler for the exchange %v and message type %v", exchangeName, adapters.GetMessageLabel(t))
-			return
-		}
-	}
-
-	handlerSvc := exchange_receiver.New[T](client.Connection)
-	go handlerSvc.HandleMessage(exchangeName, handler)
-	client.ExchangeHandlers = append(client.ExchangeHandlers, name)
-}
-
-func RegisterExchangeHandler[T adapters.Message](exchangeName string, exchangeType entities.ReceiverExchangeType, routingKey string, handler func(T) message.MessageResult) {
-	client := Get()
-
-	t := *new(T)
-	name := exchangeName + "." + adapters.GetMessageLabel(t)
-	for _, exchangeHandlerName := range client.ExchangeHandlers {
-		if strings.EqualFold(exchangeHandlerName, name) {
-			client.logger.Warn("There is already a handler for the exchange %v and message type %v", exchangeName, adapters.GetMessageLabel(t))
-			return
-		}
-	}
-
-	handlerSvc := exchange_receiver.New[T](client.Connection)
-	go handlerSvc.HandleMessage(exchangeName, handler)
-	client.ExchangeHandlers = append(client.ExchangeHandlers, name)
-}
-
 func StartListening() {
 	var forever chan struct{}
 	<-forever
@@ -155,8 +60,38 @@ func StartListening() {
 }
 
 func (client *RabbitMQClient) Close() {
-	if !client.Connection.IsClosed() {
+	if !client.connection.IsClosed() {
 		client.logger.Info("Closing RabbitMQ open connection")
-		client.Connection.Close()
+		client.connection.Close()
 	}
+}
+
+func (client *RabbitMQClient) Connect() error {
+	if client.connection == nil || client.connection.IsClosed() {
+		conn, err := amqp091.Dial(client.ConnectionString)
+		if err != nil {
+			client.logger.Exception(err, "failed to connect to rabbitmq server")
+			return nil
+		}
+
+		client.connection = conn
+		client.logger.Info("Connected to RabbitMQ server")
+	}
+	return nil
+}
+
+func (client *RabbitMQClient) GetChannel() (*amqp091.Channel, error) {
+	if client.connection.IsClosed() {
+		err := client.Connect()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	ch, err := client.connection.Channel()
+	if err != nil {
+		client.logger.Exception(err, "failed to create channel to rabbitmq server")
+	}
+
+	return ch, err
 }
