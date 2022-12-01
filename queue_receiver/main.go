@@ -2,6 +2,9 @@ package queue_receiver
 
 import (
 	"errors"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/cjlapao/common-go-rabbitmq/adapters"
 	"github.com/cjlapao/common-go-rabbitmq/client"
@@ -9,6 +12,7 @@ import (
 	"github.com/cjlapao/common-go-rabbitmq/message"
 	"github.com/cjlapao/common-go-rabbitmq/processor"
 	"github.com/cjlapao/common-go/log"
+	"github.com/rabbitmq/amqp091-go"
 )
 
 type QueueReceiverService[T adapters.Message] struct {
@@ -16,7 +20,7 @@ type QueueReceiverService[T adapters.Message] struct {
 	client       *client.RabbitMQClient
 	QueueName    string
 	Options      entities.ReceiverOptions
-	QueueOptions entities.AmqpChannelOptions
+	QueueOptions entities.AmqpQueueOptions
 	handler      func(T) message.MessageResult
 }
 
@@ -30,7 +34,7 @@ func New[T adapters.Message]() *QueueReceiverService[T] {
 			NoLocal:   false,
 			NoWait:    false,
 		},
-		QueueOptions: entities.AmqpChannelOptions{
+		QueueOptions: entities.AmqpQueueOptions{
 			Durable:    false,
 			AutoDelete: false,
 			Internal:   false,
@@ -95,13 +99,16 @@ func (r *QueueReceiverService[T]) handle(queueName string) error {
 			}
 		}
 
+		args := amqp091.Table{}
+		args["x-queue-version"] = 2
+
 		if _, err := ch.QueueDeclare(
 			r.QueueName,
 			r.QueueOptions.Durable,
 			r.QueueOptions.AutoDelete,
 			r.QueueOptions.Internal,
 			r.QueueOptions.NoWait,
-			nil,
+			args,
 		); err != nil {
 			r.logger.Exception(err, "creating queue %v", queueName)
 			return err
@@ -134,7 +141,8 @@ func (r *QueueReceiverService[T]) handle(queueName string) error {
 		return err
 	}
 
-	var forever chan struct{}
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	r.logger.Info("starting to handle messages %v", messageType)
 	go func() {
@@ -143,7 +151,7 @@ func (r *QueueReceiverService[T]) handle(queueName string) error {
 		}
 	}()
 
-	<-forever
+	<-c
 
 	return nil
 }
