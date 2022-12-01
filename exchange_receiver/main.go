@@ -2,6 +2,9 @@ package exchange_receiver
 
 import (
 	"errors"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/cjlapao/common-go-rabbitmq/adapters"
 	"github.com/cjlapao/common-go-rabbitmq/client"
@@ -9,6 +12,7 @@ import (
 	"github.com/cjlapao/common-go-rabbitmq/message"
 	"github.com/cjlapao/common-go-rabbitmq/processor"
 	"github.com/cjlapao/common-go/log"
+	"github.com/rabbitmq/amqp091-go"
 )
 
 type ExchangeReceiverService[T adapters.Message] struct {
@@ -20,8 +24,8 @@ type ExchangeReceiverService[T adapters.Message] struct {
 	QueueName       string
 	Type            entities.ReceiverExchangeType
 	Options         entities.ReceiverOptions
-	ExchangeOptions entities.AmqpChannelOptions
-	QueueOptions    entities.AmqpChannelOptions
+	ExchangeOptions entities.AmqpQueueOptions
+	QueueOptions    entities.AmqpQueueOptions
 	handler         func(T) message.MessageResult
 }
 
@@ -36,13 +40,13 @@ func New[T adapters.Message]() *ExchangeReceiverService[T] {
 			NoWait:    false,
 		},
 		Type: entities.Fanout,
-		ExchangeOptions: entities.AmqpChannelOptions{
+		ExchangeOptions: entities.AmqpQueueOptions{
 			Durable:    true,
 			AutoDelete: false,
 			Internal:   false,
 			NoWait:     false,
 		},
-		QueueOptions: entities.AmqpChannelOptions{
+		QueueOptions: entities.AmqpQueueOptions{
 			Durable:    false,
 			Exclusive:  true,
 			AutoDelete: false,
@@ -121,13 +125,16 @@ func (r *ExchangeReceiverService[T]) handle(exchangeName string) error {
 		}
 	}
 
+	args := amqp091.Table{}
+	args["x-queue-version"] = 2
+
 	q, err := ch.QueueDeclare(
 		r.QueueName,
 		r.QueueOptions.Durable,
 		r.QueueOptions.AutoDelete,
 		r.QueueOptions.Exclusive,
 		r.QueueOptions.NoWait,
-		nil,
+		args,
 	)
 
 	if err != nil {
@@ -176,8 +183,8 @@ func (r *ExchangeReceiverService[T]) handle(exchangeName string) error {
 		return err
 	}
 
-	var forever chan struct{}
-
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	r.logger.Info("Starting to handle messages %v for exchange %v", messageType, exchangeName)
 
 	go func() {
@@ -186,7 +193,7 @@ func (r *ExchangeReceiverService[T]) handle(exchangeName string) error {
 		}
 	}()
 
-	<-forever
+	<-c
 
 	ch.Close()
 	return nil
