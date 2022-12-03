@@ -19,6 +19,8 @@ type RabbitMQClient struct {
 	ConnectionString string
 	connection       *amqp091.Connection
 	DefaultTimeout   int
+	retryFor         int
+	currentBackOff   int
 	ExchangeHandlers []string
 	QueuesHandlers   []string
 }
@@ -34,6 +36,7 @@ func New(ConnectionString string) *RabbitMQClient {
 	client := RabbitMQClient{
 		logger:           log.Get(),
 		ConnectionString: ConnectionString,
+		retryFor:         5,
 		ExchangeHandlers: make([]string, 0),
 		QueuesHandlers:   make([]string, 0),
 		DefaultTimeout:   defaultTimeout,
@@ -73,15 +76,23 @@ func (client *RabbitMQClient) Close() {
 }
 
 func (client *RabbitMQClient) Connect() error {
-	if client.connection == nil || client.connection.IsClosed() {
-		conn, err := amqp091.Dial(client.ConnectionString)
-		if err != nil {
-			client.logger.Exception(err, "failed to connect to rabbitmq server")
-			return nil
-		}
+	attempt := 0
+	for attempt < client.retryFor {
+		if client.connection == nil || client.connection.IsClosed() {
+			conn, err := amqp091.Dial(client.ConnectionString)
+			if err != nil {
+				client.logger.Exception(err, "failed to connect to rabbitmq server, retrying")
+				attempt = attempt + 1
+				if attempt > client.retryFor {
+					client.logger.Exception(err, "failed to connect to rabbitmq server, giving up")
+					return err
+				}
+			}
 
-		client.connection = conn
-		client.logger.Info("Connected to RabbitMQ server")
+			client.connection = conn
+			client.logger.Info("Connected to RabbitMQ server")
+			break
+		}
 	}
 	return nil
 }
