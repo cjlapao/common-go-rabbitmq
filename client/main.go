@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/cjlapao/common-go-rabbitmq/constants"
 	"github.com/cjlapao/common-go-rabbitmq/entities"
@@ -43,7 +44,10 @@ func New(ConnectionString string) *RabbitMQClient {
 	}
 
 	if client.connection == nil {
-		client.Connect()
+		err := client.Connect()
+		if err != nil {
+			return nil
+		}
 	}
 
 	return &client
@@ -77,23 +81,38 @@ func (client *RabbitMQClient) Close() {
 
 func (client *RabbitMQClient) Connect() error {
 	attempt := 0
+	// Adding ferbernacy initial sequence for back off
+	nextBackOff := 1
+	previousBackOff := 1
+
+	var err error
+	var conn *amqp091.Connection
 	for attempt < client.retryFor {
 		if client.connection == nil || client.connection.IsClosed() {
-			conn, err := amqp091.Dial(client.ConnectionString)
+			conn, err = amqp091.Dial(client.ConnectionString)
 			if err != nil {
-				client.logger.Exception(err, "failed to connect to rabbitmq server, retrying")
+				client.logger.Exception(err, "failed to connect to rabbitmq server, retrying...")
 				attempt = attempt + 1
-				if attempt > client.retryFor {
-					client.logger.Exception(err, "failed to connect to rabbitmq server, giving up")
-					return err
-				}
-			}
 
-			client.connection = conn
-			client.logger.Info("Connected to RabbitMQ server")
-			break
+				backOffFor := nextBackOff
+				// Sleeping before reattempting connection
+				time.Sleep(time.Duration(backOffFor * int(time.Second)))
+				nextBackOff = previousBackOff + backOffFor
+				previousBackOff = backOffFor
+			} else {
+				break
+			}
 		}
 	}
+
+	if err != nil {
+		client.logger.Exception(err, "failed to connect to rabbitmq server, giving up...")
+		return err
+	}
+
+	client.connection = conn
+	client.logger.Info("Connected to RabbitMQ server")
+
 	return nil
 }
 
@@ -134,11 +153,11 @@ func (client *RabbitMQClient) GetQueue(queueName string) (entities.AmqpQueue, er
 	return result, nil
 }
 
-func (client *RabbitMQClient) CreateQueue(queueName string, options ...entities.QueueOptions) error {
+func (client *RabbitMQClient) CreateQueue(queueName string, options ...entities.CreateOptions) error {
 	return client.CreateQueueWithArguments(queueName, entities.AmqpQueueArguments{}, options...)
 }
 
-func (client *RabbitMQClient) CreateQueueWithArguments(queueName string, args entities.AmqpQueueArguments, options ...entities.QueueOptions) error {
+func (client *RabbitMQClient) CreateQueueWithArguments(queueName string, args entities.AmqpQueueArguments, options ...entities.CreateOptions) error {
 	ch, err := client.GetChannel()
 	if err != nil {
 		return err
@@ -150,16 +169,16 @@ func (client *RabbitMQClient) CreateQueueWithArguments(queueName string, args en
 	isNoWait := false
 
 	for _, option := range options {
-		if option == entities.DurableQueueOption {
+		if option == entities.DurableCreateOption {
 			isDurable = true
 		}
-		if option == entities.AutoDeleteQueueOption {
+		if option == entities.AutoDeleteCreateOption {
 			isAutoDelete = true
 		}
-		if option == entities.ExclusiveQueueOption {
+		if option == entities.ExclusiveCreateOption {
 			isExclusive = true
 		}
-		if option == entities.NoWaitQueueOption {
+		if option == entities.NoWaitCreateOption {
 			isNoWait = true
 		}
 	}
@@ -283,23 +302,23 @@ func (client *RabbitMQClient) PurgeQueue(queueName string, routingKey string, ex
 	return nil
 }
 
-func (client *RabbitMQClient) CreateExchange(exchangeName string, exchangeType entities.ReceiverExchangeType, options ...entities.QueueOptions) error {
+func (client *RabbitMQClient) CreateExchange(exchangeName string, exchangeType entities.ReceiverExchangeType, options ...entities.CreateOptions) error {
 	isDurable := false
 	isAutoDelete := false
 	isExclusive := false
 	isNoWait := false
 
 	for _, option := range options {
-		if option == entities.DurableQueueOption {
+		if option == entities.DurableCreateOption {
 			isDurable = true
 		}
-		if option == entities.AutoDeleteQueueOption {
+		if option == entities.AutoDeleteCreateOption {
 			isAutoDelete = true
 		}
-		if option == entities.ExclusiveQueueOption {
+		if option == entities.ExclusiveCreateOption {
 			isExclusive = true
 		}
-		if option == entities.NoWaitQueueOption {
+		if option == entities.NoWaitCreateOption {
 			isNoWait = true
 		}
 	}
