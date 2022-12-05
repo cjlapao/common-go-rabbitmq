@@ -15,12 +15,12 @@ type AmqpQueueOptions struct {
 	NoWait     bool
 }
 
-type QueueOptions int8
+type CreateOptions int8
 
 const (
-	ExclusiveQueueOption QueueOptions = iota
-	DurableQueueOption
-	AutoDeleteQueueOption
-	InternalQueueOption
-	NoWaitQueueOption
+	ExclusiveCreateOption CreateOptions = iota
+	DurableCreateOption
+	AutoDeleteCreateOption
+	InternalCreateOption
+	NoWaitCreateOption
 )
