@@ -23,7 +23,6 @@ func ProcessMessage[T adapters.Message](d amqp.Delivery, handler func(T) message
 		}
 	} else {
 		logger.Info("Received message id %v for domain %v", d.CorrelationId, d.AppId)
-		logger.Info(d.CorrelationId)
 		var msg T
 		err := json.Unmarshal(d.Body, &msg)
 		if err != nil {
