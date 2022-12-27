@@ -50,7 +50,8 @@ func New(ConnectionString string) *RabbitMQClient {
 		}
 	}
 
-	return &client
+	globalRabbitMQClient = &client
+	return globalRabbitMQClient
 }
 
 func Get() *RabbitMQClient {
