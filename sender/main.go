@@ -30,7 +30,7 @@ func New() *SenderService {
 	return &result
 }
 
-func (s *SenderService) Send(msg SenderMessage) error {
+func (s *SenderService) Send(msg Message) error {
 	ch, err := s.client.GetChannel()
 	if err != nil {
 		return err
