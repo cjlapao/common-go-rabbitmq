@@ -5,7 +5,7 @@ import (
 	"github.com/cjlapao/common-go-rabbitmq/entities"
 )
 
-type SenderMessage struct {
+type Message struct {
 	Type          entities.SenderMessageType
 	Name          string
 	RoutingKey    string
@@ -14,8 +14,8 @@ type SenderMessage struct {
 	Message       adapters.Message
 }
 
-func NewQueueMessage(queueName string, msg adapters.Message) SenderMessage {
-	return SenderMessage{
+func NewQueueMessage(queueName string, msg adapters.Message) Message {
+	return Message{
 		Type:          entities.QueueMessage,
 		Name:          queueName,
 		RoutingKey:    "",
@@ -25,8 +25,8 @@ func NewQueueMessage(queueName string, msg adapters.Message) SenderMessage {
 	}
 }
 
-func NewQueueMessageWithCallback(queueName string, callBackQueue string, msg adapters.Message) SenderMessage {
-	return SenderMessage{
+func NewQueueMessageWithCallback(queueName string, callBackQueue string, msg adapters.Message) Message {
+	return Message{
 		Type:          entities.QueueMessage,
 		Name:          queueName,
 		RoutingKey:    "",
@@ -36,8 +36,8 @@ func NewQueueMessageWithCallback(queueName string, callBackQueue string, msg ada
 	}
 }
 
-func NewTransientQueueMessage(queueName string, msg adapters.Message) SenderMessage {
-	return SenderMessage{
+func NewTransientQueueMessage(queueName string, msg adapters.Message) Message {
+	return Message{
 		Type:          entities.QueueMessage,
 		Name:          queueName,
 		RoutingKey:    "",
@@ -47,8 +47,8 @@ func NewTransientQueueMessage(queueName string, msg adapters.Message) SenderMess
 	}
 }
 
-func NewTransientQueueMessageWithCallback(queueName string, callBackQueue string, msg adapters.Message) SenderMessage {
-	return SenderMessage{
+func NewTransientQueueMessageWithCallback(queueName string, callBackQueue string, msg adapters.Message) Message {
+	return Message{
 		Type:          entities.QueueMessage,
 		Name:          queueName,
 		RoutingKey:    "",
@@ -58,8 +58,8 @@ func NewTransientQueueMessageWithCallback(queueName string, callBackQueue string
 	}
 }
 
-func NewExchangeMessage(queueName string, routingKey string, msg adapters.Message) SenderMessage {
-	return SenderMessage{
+func NewExchangeMessage(queueName string, routingKey string, msg adapters.Message) Message {
+	return Message{
 		Type:          entities.ExchangeMessage,
 		Name:          queueName,
 		RoutingKey:    routingKey,
@@ -69,8 +69,8 @@ func NewExchangeMessage(queueName string, routingKey string, msg adapters.Messag
 	}
 }
 
-func NewExchangeMessageWithCallback(queueName string, routingKey string, callBackQueue string, msg adapters.Message) SenderMessage {
-	return SenderMessage{
+func NewExchangeMessageWithCallback(queueName string, routingKey string, callBackQueue string, msg adapters.Message) Message {
+	return Message{
 		Type:          entities.ExchangeMessage,
 		Name:          queueName,
 		RoutingKey:    routingKey,
@@ -80,8 +80,8 @@ func NewExchangeMessageWithCallback(queueName string, routingKey string, callBac
 	}
 }
 
-func NewTransientExchangeMessage(queueName string, routingKey string, msg adapters.Message) SenderMessage {
-	return SenderMessage{
+func NewTransientExchangeMessage(queueName string, routingKey string, msg adapters.Message) Message {
+	return Message{
 		Type:          entities.ExchangeMessage,
 		Name:          queueName,
 		RoutingKey:    routingKey,
@@ -91,8 +91,8 @@ func NewTransientExchangeMessage(queueName string, routingKey string, msg adapte
 	}
 }
 
-func NewTransientExchangeMessageWithCallback(queueName string, routingKey string, callBackQueue string, msg adapters.Message) SenderMessage {
-	return SenderMessage{
+func NewTransientExchangeMessageWithCallback(queueName string, routingKey string, callBackQueue string, msg adapters.Message) Message {
+	return Message{
 		Type:          entities.ExchangeMessage,
 		Name:          queueName,
 		RoutingKey:    routingKey,
