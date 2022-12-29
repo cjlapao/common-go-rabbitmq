@@ -22,8 +22,8 @@ type RabbitMQClient struct {
 	DefaultTimeout   int
 	retryFor         int
 	currentBackOff   int
-	ExchangeHandlers []string
-	QueuesHandlers   []string
+	// ExchangeHandlers map[string]*exchange_receiver.ExchangeReceiverService
+	// QueuesHandlers map[string]*queue_receiver.QueueReceiverService
 }
 
 func New(ConnectionString string) *RabbitMQClient {
@@ -38,9 +38,9 @@ func New(ConnectionString string) *RabbitMQClient {
 		logger:           log.Get(),
 		ConnectionString: ConnectionString,
 		retryFor:         5,
-		ExchangeHandlers: make([]string, 0),
-		QueuesHandlers:   make([]string, 0),
-		DefaultTimeout:   defaultTimeout,
+		// ExchangeHandlers: make(map[string]*exchange_receiver.ExchangeReceiverService),
+		// QueuesHandlers: make(map[string]*queue_receiver.QueueReceiverService),
+		DefaultTimeout: defaultTimeout,
 	}
 
 	if client.connection == nil {
@@ -71,6 +71,7 @@ func StartListening() {
 	<-c
 	client := Get()
 	client.Close()
+
 }
 
 func (client *RabbitMQClient) Close() {

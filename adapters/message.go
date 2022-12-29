@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"encoding/json"
 	"strings"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -35,4 +36,13 @@ func (t MessageDeliveryMode) ToAmqpDeliveryMode() uint8 {
 
 func GetMessageLabel[T Message](t T) string {
 	return t.Domain() + "." + t.Name() + ".v" + strings.TrimPrefix(t.Version(), "v")
+}
+
+func MessageFromJson[T Message](data []byte) (*T, error) {
+	var t T
+	if err := json.Unmarshal(data, &t); err != nil {
+		return nil, err
+	}
+
+	return &t, nil
 }
