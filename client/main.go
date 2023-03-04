@@ -6,17 +6,17 @@ import (
 	"syscall"
 	"time"
 
+	log "github.com/cjlapao/common-go-logger"
 	"github.com/cjlapao/common-go-rabbitmq/constants"
 	"github.com/cjlapao/common-go-rabbitmq/entities"
 	"github.com/cjlapao/common-go/execution_context"
-	"github.com/cjlapao/common-go/log"
 	"github.com/rabbitmq/amqp091-go"
 )
 
 var globalRabbitMQClient *RabbitMQClient
 
 type RabbitMQClient struct {
-	logger           *log.Logger
+	logger           *log.LoggerService
 	ConnectionString string
 	connection       *amqp091.Connection
 	DefaultTimeout   int

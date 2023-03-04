@@ -1,9 +1,9 @@
 package processor
 
 import (
+	log "github.com/cjlapao/common-go-logger"
 	"github.com/cjlapao/common-go-rabbitmq/adapters"
 	"github.com/cjlapao/common-go-rabbitmq/entities"
-	"github.com/cjlapao/common-go/log"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
