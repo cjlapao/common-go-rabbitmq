@@ -6,16 +6,16 @@ import (
 	"time"
 
 	cryptorand "github.com/cjlapao/common-go-cryptorand"
+	log "github.com/cjlapao/common-go-logger"
 	"github.com/cjlapao/common-go-rabbitmq/adapters"
 	"github.com/cjlapao/common-go-rabbitmq/client"
 	"github.com/cjlapao/common-go-rabbitmq/entities"
 	"github.com/cjlapao/common-go/constants"
-	"github.com/cjlapao/common-go/log"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type SenderService struct {
-	logger *log.Logger
+	logger *log.LoggerService
 	client *client.RabbitMQClient
 }
 

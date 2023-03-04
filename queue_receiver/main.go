@@ -8,19 +8,19 @@ import (
 	"strings"
 	"syscall"
 
+	log "github.com/cjlapao/common-go-logger"
 	"github.com/cjlapao/common-go-rabbitmq/adapters"
 	"github.com/cjlapao/common-go-rabbitmq/client"
 	"github.com/cjlapao/common-go-rabbitmq/entities"
 	"github.com/cjlapao/common-go-rabbitmq/message"
 	"github.com/cjlapao/common-go-rabbitmq/processor"
-	"github.com/cjlapao/common-go/log"
 	"github.com/rabbitmq/amqp091-go"
 )
 
 var registeredReceivers []*QueueReceiverService
 
 type QueueReceiverService struct {
-	logger        *log.Logger
+	logger        *log.LoggerService
 	client        *client.RabbitMQClient
 	QueueName     string
 	Options       entities.ReceiverOptions
