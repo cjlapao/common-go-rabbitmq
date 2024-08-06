@@ -58,7 +58,10 @@ func (s *SenderService) Send(msg Message) error {
 	}
 
 	msgType := adapters.GetMessageLabel(msg.Message)
-	mId := cryptorand.GetRandomString(constants.ID_SIZE)
+	mId, err := cryptorand.GetRandomString(constants.ID_SIZE)
+	if err != nil {
+		return err
+	}
 	if err := ch.PublishWithContext(ctx, msg.Name, msg.RoutingKey, false, false, amqp.Publishing{
 		DeliveryMode:  msg.DeliveryMode.ToAmqpDeliveryMode(),
 		ContentType:   msg.Message.ContentType(),
