@@ -113,7 +113,7 @@ func (r *QueueReceiverService) Exclusive() *QueueReceiverService {
 }
 
 func (r *QueueReceiverService) NoWait() *QueueReceiverService {
-	r.Options.Exclusive = true
+	r.Options.NoWait = true
 	return r
 }
 
