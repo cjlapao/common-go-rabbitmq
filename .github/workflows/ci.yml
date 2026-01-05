@@ -49,8 +49,8 @@ jobs:
       name: Create tag file
       run: |
         echo ${{ steps.tag_version.outputs.new_tag }} > tag.txt      
-    - name: Upload tag versio6
-      uses: actions/upload-artifact@v1
+    - name: Upload tag version
+      uses: actions/upload-artifact@v6
       with:
         name: tag_version
         path: ./tag.txt
