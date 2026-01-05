@@ -164,7 +164,7 @@ func (r *QueueReceiverService) Handle() error {
 		closeChan := make(chan *amqp091.Error)
 		ch.NotifyClose(closeChan)
 
-		processingChan := make(chan bool)
+		processingChan := make(chan bool, 1)
 
 		go func() {
 			for d := range msgs {
