@@ -118,7 +118,7 @@ func (r *QueueReceiverService) NoWait() *QueueReceiverService {
 }
 
 func (r *QueueReceiverService) Handle() error {
-	if r.handlers == nil || len(r.handlers) == 0 {
+	if len(r.handlers) == 0 {
 		return errors.New("no handler registered")
 	}
 
