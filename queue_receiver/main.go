@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	log "github.com/cjlapao/common-go-logger"
 	"github.com/cjlapao/common-go-rabbitmq/adapters"
@@ -112,63 +113,95 @@ func (r *QueueReceiverService) Exclusive() *QueueReceiverService {
 }
 
 func (r *QueueReceiverService) NoWait() *QueueReceiverService {
-	r.Options.Exclusive = true
+	r.Options.NoWait = true
 	return r
 }
 
 func (r *QueueReceiverService) Handle() error {
-	if r.handlers == nil || len(r.handlers) == 0 {
+	if len(r.handlers) == 0 {
 		return errors.New("no handler registered")
-	}
-
-	ch, err := r.client.GetChannel()
-	if err != nil {
-		r.logger.Exception(err, "failed to create channel")
-		return err
-	}
-
-	r.logger.Info("Opened RabbitMQ server channel for queue %v", r.QueueName)
-
-	defer ch.Close()
-
-	ch.Qos(r.PrefetchCount, 0, false)
-	msgs, err := ch.Consume(
-		r.QueueName,
-		fmt.Sprintf("Queue %s consumer handler", r.QueueName),
-		r.Options.AutoAck,
-		r.Options.Exclusive,
-		r.Options.NoLocal,
-		r.Options.NoWait,
-		nil,
-	)
-	if err != nil {
-		return err
 	}
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
-	go func() {
-		for d := range msgs {
-			processed := false
-			for _, handler := range r.handlers {
-				msgType := handler.GetType()
-				if d.Type == msgType {
-					r.logger.Info("Processing message %s in queue %s", msgType, r.QueueName)
-					processor.ProcessMessage(d, handler, r.Options)
-					processed = true
-				}
-			}
-
-			if !processed {
-				r.logger.Error("No handler found for message %s in queue %s", d.Type, r.QueueName)
+	for {
+		ch, err := r.client.GetChannel()
+		if err != nil {
+			r.logger.Exception(err, "failed to create channel")
+			select {
+			case <-c:
+				return errors.New("service interrupted")
+			case <-time.After(5 * time.Second):
+				continue
 			}
 		}
-	}()
 
-	<-c
+		r.logger.Info("Opened RabbitMQ server channel for queue %v", r.QueueName)
 
-	return nil
+		ch.Qos(r.PrefetchCount, 0, false)
+		msgs, err := ch.Consume(
+			r.QueueName,
+			fmt.Sprintf("Queue %s consumer handler", r.QueueName),
+			r.Options.AutoAck,
+			r.Options.Exclusive,
+			r.Options.NoLocal,
+			r.Options.NoWait,
+			nil,
+		)
+
+		if err != nil {
+			r.logger.Exception(err, "failed to consume messages from queue %v", r.QueueName)
+			ch.Close()
+			select {
+			case <-c:
+				return errors.New("service interrupted")
+			case <-time.After(5 * time.Second):
+				continue
+			}
+		}
+
+		closeChan := make(chan *amqp091.Error)
+		ch.NotifyClose(closeChan)
+
+		processingChan := make(chan bool, 1)
+
+		go func() {
+			for d := range msgs {
+				processed := false
+				for _, handler := range r.handlers {
+					msgType := handler.GetType()
+					if d.Type == msgType {
+						r.logger.Info("Processing message %s in queue %s", msgType, r.QueueName)
+						processor.ProcessMessage(d, handler, r.Options)
+						processed = true
+					}
+				}
+
+				if !processed {
+					r.logger.Error("No handler found for message %s in queue %s", d.Type, r.QueueName)
+				}
+			}
+			processingChan <- true
+		}()
+
+		select {
+		case <-c:
+			r.logger.Info("Service interrupted, closing channel")
+			ch.Close()
+			return nil
+		case err := <-closeChan:
+			if err != nil {
+				r.logger.Exception(err, "Channel closed unexpectedly for queue %v, reconnecting...", r.QueueName)
+			}
+		case <-processingChan:
+			r.logger.Info("Consumer channel closed for queue %v, reconnecting...", r.QueueName)
+		}
+
+		if !ch.IsClosed() {
+			ch.Close()
+		}
+	}
 }
 
 func (r *QueueReceiverService) createQueueIfNotExist() error {

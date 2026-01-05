@@ -13,24 +13,21 @@ jobs:
       matrix:
         language: [ 'go' ]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v6
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v6
       with:
-        go-version: 1.19
+        go-version: 1.25
 
     - name: Build
       run: go build -v ./...
 
     - name: Test
       run: |
-        go install github.com/axw/gocov/gocov@latest
-        go install github.com/AlekSi/gocov-xml@latest
-        go install github.com/matm/gocov-html/cmd/gocov-html@latest
-
-        go test -coverprofile coverage.txt -covermode count -v ./...
-        gocov convert coverage.txt | gocov-xml > cobertura-coverage.xml
+        go install github.com/boumenot/gocover-cobertura@latest
+        go test -coverprofile=coverage.out -covermode=count ./...
+        gocover-cobertura < coverage.out > cobertura-coverage.xml
 
     - name: Code Coverage Summary Report
       if: ${{ false }}
