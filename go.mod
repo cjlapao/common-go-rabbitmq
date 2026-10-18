@@ -6,7 +6,7 @@ require (
 	github.com/cjlapao/common-go v0.0.41
 	github.com/cjlapao/common-go-cryptorand v0.0.6
 	github.com/cjlapao/common-go-logger v0.0.10
-	github.com/rabbitmq/amqp091-go v1.13.0
+	github.com/rabbitmq/amqp091-go v1.14.0
 )
 
 require (
